@@ -1,0 +1,14 @@
+{
+  "source_url": "",
+  "link_pattern": ".*",
+  "wait_for_selector": "body",
+  "render_wait_ms": 2000,
+  "download_selector": "",
+  "download_dir": "downloads",
+  "max_concurrent": 3,
+  "headless": false,
+  "close_popups": true,
+  "click_attempts": 3,
+  "retries": 3,
+  "timeout_s": 60
+}
