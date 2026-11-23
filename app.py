@@ -259,6 +259,9 @@ class DLQueue(App):
         count = lambda s: sum(j.status == s for j in m.jobs)
         total_speed = sum(j.speed for j in m.jobs if j.status == DOWNLOADING)
         state = "[b green]▶ RUNNING[/]" if m.running else "[b yellow]⏸ STOPPED[/]"
+        wait = m.seconds_to_next_start()
+        if m.running and wait and count(PENDING) and len(m.tasks) < self.cfg.max_concurrent:
+            state += f" [dim](next start in {wait:.0f}s)[/]"
         mode = f"click [b]{self.cfg.download_selector}[/]" if self.cfg.download_selector else "direct"
         self.query_one("#stats", Static).update(
             f"{state}   slots [b]{len(m.tasks)}/{self.cfg.max_concurrent}[/]   "

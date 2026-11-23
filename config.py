@@ -15,6 +15,8 @@ class Config:
     download_selector: str = ""     # button to click on each link's page; empty = links are direct files
     download_dir: str = "downloads"
     max_concurrent: int = 3
+    start_gap_min_s: float = 10     # wait a random gap between starting one job and the next
+    start_gap_max_s: float = 20
     headless: bool = False          # False = you can watch the browser work
     close_popups: bool = True       # auto-close popups/new tabs opened by clicks
     click_attempts: int = 3         # re-click if the first click doesn't start a download

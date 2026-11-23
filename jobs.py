@@ -2,6 +2,7 @@
 import asyncio
 import itertools
 import json
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -49,6 +50,7 @@ class Manager:
         self.tasks: dict[int, asyncio.Task] = {}
         self.running = False
         self.shutting_down = False
+        self.next_start_at = 0.0  # monotonic time before which no new job may start
 
     # ---------- persistence ----------
     def load(self):
@@ -107,16 +109,21 @@ class Manager:
         self.save()
 
     # ---------- scheduling ----------
+    def seconds_to_next_start(self) -> float:
+        return max(0.0, self.next_start_at - time.monotonic())
+
     async def run(self):
-        """Completion-based: whenever a slot is free and work is pending, start it."""
+        """Completion-based: whenever a slot is free and work is pending, start it,
+        but never start two jobs closer together than a random start gap."""
         while True:
-            if self.running:
-                while len(self.tasks) < self.cfg.max_concurrent:
-                    job = next((j for j in self.jobs if j.status == PENDING and j.id not in self.tasks), None)
-                    if job is None:
-                        break
+            if self.running and len(self.tasks) < self.cfg.max_concurrent and not self.seconds_to_next_start():
+                job = next((j for j in self.jobs if j.status == PENDING and j.id not in self.tasks), None)
+                if job is not None:
                     job.status = RESOLVING
                     self.tasks[job.id] = asyncio.create_task(self._work(job))
+                    lo = max(0.0, self.cfg.start_gap_min_s)
+                    hi = max(lo, self.cfg.start_gap_max_s)
+                    self.next_start_at = time.monotonic() + random.uniform(lo, hi)
             await asyncio.sleep(0.3)
 
     async def _work(self, job: Job):

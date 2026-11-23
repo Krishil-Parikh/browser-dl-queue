@@ -21,7 +21,9 @@ python app.py
    The page is opened in Chromium, JS is allowed to render, and every link
    (`<a href>` plus plain-text URLs) matching the filter is listed. Nothing downloads yet.
 2. **Review.** Click **✕** on a row to drop it, or tick rows with **☐** and use the toolbar.
-3. Click **② ▶ Continue**. At most *slots* jobs run; the rest wait.
+3. Click **② ▶ Continue**. At most *slots* jobs run; the rest wait. Jobs are started
+   one at a time with a random gap between starts (`start_gap_min_s`–`start_gap_max_s`
+   in `config.json`, default 10–20 s); the status bar shows the countdown.
 4. While running, each row's **⏸ / ▶ / ↻** pauses, resumes or retries it, and **✕** removes it.
 
 Paused or interrupted files resume from where they stopped (`.part` files + HTTP Range).
