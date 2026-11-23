@@ -20,6 +20,9 @@ class Config:
     headless: bool = False          # False = you can watch the browser work
     close_popups: bool = True       # auto-close popups/new tabs opened by clicks
     click_attempts: int = 3         # re-click if the first click doesn't start a download
+    verify_timeout_s: int = 600     # how long to wait for you to finish a "verify you are human" page
+    slowdown_factor: float = 1.5    # each human check multiplies the start gap by this...
+    max_slowdown: float = 4.0       # ...up to this many times the original gap
     retries: int = 3                # attempts per file before marking it failed
     timeout_s: int = 60
 

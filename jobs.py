@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from browser import HumanCheckNeeded
 from downloader import fetch
 
 STATE_PATH = Path("state.json")
@@ -51,6 +52,18 @@ class Manager:
         self.running = False
         self.shutting_down = False
         self.next_start_at = 0.0  # monotonic time before which no new job may start
+        self.slowdown = 1.0       # grows each time a human check shows up
+        browser.on_challenge = self._on_challenge
+
+    def _on_challenge(self, url):
+        self.slowdown = min(self.cfg.max_slowdown, self.slowdown * self.cfg.slowdown_factor)
+        lo, hi = self.gap_range()
+        self.log(f"[yellow]slowing down[/]: start gap is now {lo:.0f}-{hi:.0f}s (x{self.slowdown:.1f})")
+
+    def gap_range(self):
+        lo = max(0.0, self.cfg.start_gap_min_s) * self.slowdown
+        hi = max(lo, self.cfg.start_gap_max_s * self.slowdown)
+        return lo, hi
 
     # ---------- persistence ----------
     def load(self):
@@ -116,14 +129,15 @@ class Manager:
         """Completion-based: whenever a slot is free and work is pending, start it,
         but never start two jobs closer together than a random start gap."""
         while True:
-            if self.running and len(self.tasks) < self.cfg.max_concurrent and not self.seconds_to_next_start():
+            if self.browser.verifying:
+                # nothing new starts while you verify, and the full gap applies after you finish
+                self.next_start_at = max(self.next_start_at, time.monotonic() + self.gap_range()[0])
+            elif self.running and len(self.tasks) < self.cfg.max_concurrent and not self.seconds_to_next_start():
                 job = next((j for j in self.jobs if j.status == PENDING and j.id not in self.tasks), None)
                 if job is not None:
                     job.status = RESOLVING
                     self.tasks[job.id] = asyncio.create_task(self._work(job))
-                    lo = max(0.0, self.cfg.start_gap_min_s)
-                    hi = max(lo, self.cfg.start_gap_max_s)
-                    self.next_start_at = time.monotonic() + random.uniform(lo, hi)
+                    self.next_start_at = time.monotonic() + random.uniform(*self.gap_range())
             await asyncio.sleep(0.3)
 
     async def _work(self, job: Job):
@@ -143,6 +157,13 @@ class Manager:
                     return
                 except asyncio.CancelledError:
                     raise
+                except HumanCheckNeeded:
+                    self.running = False
+                    job.status, job.attempts = PENDING, 0
+                    job.error = "human check appeared - press h for a visible browser, then Continue"
+                    self.log(f"[b red]queue stopped[/]: human check on {job.url}, but the browser is headless. "
+                             "Press [b]h[/] for a visible browser, then Continue.")
+                    return
                 except Exception as e:
                     job.error = f"{type(e).__name__}: {e}"[:300]
                     job.speed = 0.0

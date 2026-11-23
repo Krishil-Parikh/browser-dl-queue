@@ -26,6 +26,20 @@ python app.py
    in `config.json`, default 10–20 s); the status bar shows the countdown.
 4. While running, each row's **⏸ / ▶ / ↻** pauses, resumes or retries it, and **✕** removes it.
 
+### "Verify you are human" pages
+
+If a page shows a human check (Cloudflare, hCaptcha, reCAPTCHA, "Just a moment...", etc.):
+
+- **Everything is put on hold.** No new jobs start and no new pages open.
+- The TUI beeps, shows a red banner, and the browser window is brought to the front.
+- **You complete the check yourself.** The app never tries to solve or get around it.
+- Once the real page (with the download button) appears, that job continues and the queue resumes.
+- After each check the start gap is multiplied by `slowdown_factor` (1.5x, up to `max_slowdown` 4x),
+  so the queue runs slower for the rest of the session. The status bar shows the current gap.
+
+This needs the visible browser. In headless mode the queue stops and asks you to press `h`.
+You get `verify_timeout_s` (default 10 min) per check.
+
 Paused or interrupted files resume from where they stopped (`.part` files + HTTP Range).
 The queue is saved to `state.json`, so quitting and reopening picks up where you left off.
 

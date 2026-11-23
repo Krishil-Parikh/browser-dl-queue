@@ -11,6 +11,9 @@
   "headless": false,
   "close_popups": true,
   "click_attempts": 3,
+  "verify_timeout_s": 600,
+  "slowdown_factor": 1.5,
+  "max_slowdown": 4.0,
   "retries": 3,
   "timeout_s": 60
 }

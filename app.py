@@ -18,7 +18,7 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, RichLog, Static, TextArea
 
-from browser import Browser
+from browser import Browser, HumanCheckNeeded
 from config import Config
 from jobs import ACTIVE, DONE, DOWNLOADING, FAILED, PAUSED, PENDING, RESOLVING, Manager
 
@@ -120,6 +120,7 @@ class DLQueue(App):
     #toolbar Button { margin-right: 1; }
     #stats { height: 1; padding: 0 1; background: $boost; margin-top: 1; }
     #hint { height: 1; padding: 0 1; color: $warning; }
+    #hint.alert { background: $error; color: $text; text-style: bold; }
     #detail { height: 1; padding: 0 1; color: $text-muted; }
     JobTable { height: 1fr; }
     RichLog { height: 8; border-top: solid $primary; }
@@ -153,6 +154,7 @@ class DLQueue(App):
         self.manager.load()
         self.checked: set[int] = set()
         self._row_ids: list[int] = []
+        self._was_verifying = False
 
     # ---------- layout ----------
     def compose(self) -> ComposeResult:
@@ -267,20 +269,32 @@ class DLQueue(App):
             f"{state}   slots [b]{len(m.tasks)}/{self.cfg.max_concurrent}[/]   "
             f"total {len(m.jobs)}  pending {count(PENDING)}  paused {count(PAUSED)}  "
             f"done [green]{count(DONE)}[/]  failed [red]{count(FAILED)}[/]  ticked {len(self.checked)}   "
-            f"⬇ [b]{human(total_speed)}/s[/]   mode: {mode}   "
+            f"⬇ [b]{human(total_speed)}/s[/]   gap {m.gap_range()[0]:.0f}-{m.gap_range()[1]:.0f}s"
+            f"{f' [yellow](slowed x{m.slowdown:.1f})[/]' if m.slowdown > 1 else ''}   mode: {mode}   "
             f"browser: {'headless' if self.cfg.headless else 'visible'}"
         )
         run_btn = self.query_one("#run", Button)
         run_btn.label = "⏸ Stop" if m.running else "② ▶ Continue"
         run_btn.variant = "warning" if m.running else "success"
 
-        if not m.jobs:
-            hint = "Step 1: enter the source page URL + filter, then click ① Fetch links (or + Add URLs)."
+        verifying = self.browser.verifying
+        if verifying and not self._was_verifying:
+            self.bell()
+            self.notify("Human check: complete it in the browser window", severity="error", timeout=10)
+        self._was_verifying = verifying
+        hint_widget = self.query_one("#hint", Static)
+        hint_widget.set_class(verifying, "alert")
+
+        if verifying:
+            hint = (f"🛑 HUMAN CHECK - complete it in the browser window. Everything is on hold "
+                    f"until the page is ready.  ({self.browser.verifying_url})")
+        elif not m.jobs:
+            hint ="Step 1: enter the source page URL + filter, then click ① Fetch links (or + Add URLs)."
         elif not m.running and count(PENDING):
             hint = "Step 2: review the list - click ✕ to drop a file, ☐ to tick several - then click ② ▶ Continue."
         else:
             hint = ""
-        self.query_one("#hint", Static).update(hint)
+        hint_widget.update(Text(hint))
 
         job = self.cursor_job()
         detail = Text()
@@ -364,6 +378,10 @@ class DLQueue(App):
         self.log_msg(f"reading links from {url} ...")
         try:
             links = await self.browser.extract_links(url)
+        except HumanCheckNeeded:
+            self.log_msg("[red]fetch stopped:[/] the page shows a human check but the browser is headless. "
+                         "Press [b]h[/] for a visible browser and fetch again.")
+            return
         except Exception as e:
             self.log_msg(f"[red]fetch failed:[/] {e}")
             return
